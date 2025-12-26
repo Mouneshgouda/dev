@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request
 import pandas as pd
-import faiss
+import numpy as np
 from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -14,8 +14,8 @@ app = Flask(__name__)
 # ----------------------------
 # Gemini Setup
 # ----------------------------
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-llm = genai.GenerativeModel("gemini-2.5-flash")
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # ----------------------------
 # Load CSV
@@ -24,20 +24,23 @@ df = pd.read_csv("qa_data (1).csv")
 docs = [f"Q: {q}\nA: {a}" for q, a in zip(df.question, df.answer)]
 
 # ----------------------------
-# Embeddings + FAISS
+# Embeddings (SMALL MODEL)
 # ----------------------------
 embedder = SentenceTransformer("paraphrase-MiniLM-L3-v2")
-embeddings = embedder.encode(docs)
-
-index = faiss.IndexFlatL2(embeddings.shape[1])
-index.add(embeddings)
+doc_embeddings = embedder.encode(docs)
 
 # ----------------------------
-# RAG Function
+# Simple RAG (Cosine Similarity)
 # ----------------------------
 def rag(query):
-    _, idx = index.search(embedder.encode([query]), 1)
-    context = docs[idx[0][0]]
+    q_emb = embedder.encode([query])[0]
+
+    scores = np.dot(doc_embeddings, q_emb) / (
+        np.linalg.norm(doc_embeddings, axis=1) * np.linalg.norm(q_emb)
+    )
+
+    best_idx = scores.argmax()
+    context = docs[best_idx]
 
     prompt = f"""
 Answer ONLY from the context below.
@@ -48,7 +51,7 @@ Context:
 
 Question: {query}
 """
-    return llm.generate_content(prompt).text.strip()
+    return model.generate_content(prompt).text.strip()
 
 # ----------------------------
 # Flask Route
@@ -59,12 +62,10 @@ def home():
     if request.method == "POST":
         query = request.form["query"]
         answer = rag(query)
-
     return render_template("index.html", answer=answer)
 
 # ----------------------------
 # Run App
 # ----------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
-
+    app.run()
