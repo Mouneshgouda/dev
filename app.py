@@ -1,7 +1,5 @@
 from flask import Flask, render_template, request
 import pandas as pd
-import numpy as np
-from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
@@ -21,37 +19,29 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 # Load CSV
 # ----------------------------
 df = pd.read_csv("qa_data (1).csv")
-docs = [f"Q: {q}\nA: {a}" for q, a in zip(df.question, df.answer)]
+
+# Convert CSV to text context
+context_text = ""
+for _, row in df.iterrows():
+    context_text += f"Q: {row['question']}\nA: {row['answer']}\n\n"
 
 # ----------------------------
-# Embeddings (SMALL MODEL)
+# Gemini Q&A Function
 # ----------------------------
-embedder = SentenceTransformer("paraphrase-MiniLM-L3-v2")
-doc_embeddings = embedder.encode(docs)
-
-# ----------------------------
-# Simple RAG (Cosine Similarity)
-# ----------------------------
-def rag(query):
-    q_emb = embedder.encode([query])[0]
-
-    scores = np.dot(doc_embeddings, q_emb) / (
-        np.linalg.norm(doc_embeddings, axis=1) * np.linalg.norm(q_emb)
-    )
-
-    best_idx = scores.argmax()
-    context = docs[best_idx]
-
+def ask_gemini(query):
     prompt = f"""
-Answer ONLY from the context below.
-If not found, say: No relevant Q&A found.
+You are a Q&A assistant.
+
+Answer ONLY using the context below.
+If the answer is not present, say: No relevant Q&A found.
 
 Context:
-{context}
+{context_text}
 
 Question: {query}
 """
     return model.generate_content(prompt).text.strip()
+
 
 # ----------------------------
 # Flask Route
@@ -61,7 +51,7 @@ def home():
     answer = ""
     if request.method == "POST":
         query = request.form["query"]
-        answer = rag(query)
+        answer = ask_gemini(query)
     return render_template("index.html", answer=answer)
 
 # ----------------------------
