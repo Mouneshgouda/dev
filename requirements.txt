@@ -5,4 +5,3 @@ faiss-cpu
 sentence-transformers
 google-generativeai
 python-dotenv
-torch==2.2.2+cpu
