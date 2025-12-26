@@ -26,7 +26,7 @@ docs = [f"Q: {q}\nA: {a}" for q, a in zip(df.question, df.answer)]
 # ----------------------------
 # Embeddings + FAISS
 # ----------------------------
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+embedder = SentenceTransformer("paraphrase-MiniLM-L3-v2")
 embeddings = embedder.encode(docs)
 
 index = faiss.IndexFlatL2(embeddings.shape[1])
